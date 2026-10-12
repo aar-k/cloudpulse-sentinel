@@ -5,7 +5,7 @@ Each component is normalized to 0-100. Weights/bands are project-defined.
 """
 from dataclasses import dataclass
 
-WEIGHTS = {"cpu": 0.25, "memory": 0.20, "latency": 0.20, "error": 0.20, "traffic": 0.15}
+WEIGHTS = {"cpu": 0.30, "memory": 0.25, "latency": 0.20, "error": 0.15, "traffic": 0.10}
 
 # Tunable normalization ranges (document any changes after testing)
 LATENCY_OK_MS, LATENCY_BAD_MS = 100.0, 1000.0
