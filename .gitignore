@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+*.db
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+*.pem
+.pytest_cache/
+data/synthetic_metrics.csv
+logs/
+cloudpulse.db*

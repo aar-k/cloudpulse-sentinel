@@ -1,0 +1,50 @@
+name: CI-CD
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Lint (errors only)
+        run: ruff check --select E9,F .
+      - name: Unit and integration tests
+        run: pytest -q
+      - name: Build all Docker images
+        run: |
+          cp .env.example .env
+          docker compose build
+
+  # Runs only on pushes to main AND only after you set the repository variable DEPLOY_ENABLED=true
+  # (Settings > Secrets and variables > Actions > Variables). See Step "Auto-deploy" in the guide.
+  deploy:
+    needs: test-and-build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Deploy to the EC2 server through AWS Systems Manager
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "CloudPulse deploy ${{ github.sha }}" \
+            --parameters 'commands=["set -e","cd /opt/cloudpulse-sentinel","git pull origin main","docker compose up -d --build","sleep 30","curl -fsS localhost:8001/health","curl -fsS localhost:8002/health","curl -fsS localhost:8003/health","curl -fsS localhost:8004/health"]' \
+            --query "Command.CommandId" --output text)
+          echo "SSM command: $CMD_ID"
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "${{ vars.EC2_INSTANCE_ID }}" || true
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ vars.EC2_INSTANCE_ID }}" \
+            --query "{Status:Status,Output:StandardOutputContent,Errors:StandardErrorContent}" --output json | tee result.json
+          test "$(python3 -c "import json;print(json.load(open('result.json'))['Status'])")" = "Success"

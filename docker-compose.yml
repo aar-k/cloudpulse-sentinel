@@ -1,0 +1,90 @@
+# Start everything:  docker compose up --build
+# COMPOSE_PROFILES in .env switches optional parts on:
+#   localdb = local PostgreSQL (laptop)      https = Caddy with automatic HTTPS (AWS)
+x-db: &db-url
+  DATABASE_URL: postgresql+psycopg://${DB_USER:-cp}:${DB_PASSWORD}@${DB_HOST:-db}:5432/${DB_NAME:-cloudpulse}
+x-secrets: &secrets
+  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in your .env file}
+  INTERNAL_KEY: ${INTERNAL_KEY:?Set INTERNAL_KEY in your .env file}
+x-aws: &aws
+  AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-ap-south-1}
+
+services:
+  db:
+    image: postgres:16
+    profiles: ["localdb"]
+    environment:
+      POSTGRES_USER: ${DB_USER:-cp}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-cloudpulse}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  auth-service:
+    build: {context: ., dockerfile: services/auth-service/Dockerfile}
+    ports: ["8004:8000"]
+    restart: unless-stopped
+    environment:
+      <<: [*db-url, *secrets]
+      SEED_PASSWORD: ${SEED_PASSWORD:-}
+
+  metrics-service:
+    build: {context: ., dockerfile: services/metrics-service/Dockerfile}
+    ports: ["8001:8000"]
+    restart: unless-stopped
+    environment:
+      <<: [*db-url, *secrets, *aws]
+      INCIDENT_URL: http://incident-service:8000
+      S3_BUCKET: ${S3_BUCKET:-}
+
+  incident-service:
+    build: {context: ., dockerfile: services/incident-service/Dockerfile}
+    ports: ["8002:8000"]
+    restart: unless-stopped
+    environment:
+      <<: [*db-url, *secrets, *aws]
+      REMEDIATION_URL: http://remediation-service:8000
+      SQS_QUEUE_URL: ${SQS_QUEUE_URL:-}
+      SNS_TOPIC_ARN: ${SNS_TOPIC_ARN:-}
+      DASHBOARD_URL: ${DASHBOARD_URL:-}
+
+  remediation-service:
+    build: {context: ., dockerfile: services/remediation-service/Dockerfile}
+    ports: ["8003:8000"]
+    restart: unless-stopped
+    environment:
+      <<: [*db-url, *secrets]
+      INCIDENT_URL: http://incident-service:8000
+
+  simulator:
+    build: {context: ., dockerfile: data/Dockerfile}
+    restart: unless-stopped
+    environment:
+      INTERNAL_KEY: ${INTERNAL_KEY:?Set INTERNAL_KEY in your .env file}
+      METRICS_URL: http://metrics-service:8000/metrics
+      REMEDIATION_URL: http://remediation-service:8000
+
+  dashboard:
+    build: {context: ., dockerfile: dashboard/Dockerfile}
+    ports: ["8501:8501"]
+    restart: unless-stopped
+    environment:
+      AUTH_URL: http://auth-service:8000
+      METRICS_URL: http://metrics-service:8000
+      INCIDENT_URL: http://incident-service:8000
+      REMEDIATION_URL: http://remediation-service:8000
+
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    volumes:
+      - ./deployment/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+volumes:
+  pgdata:
+  caddy_data:

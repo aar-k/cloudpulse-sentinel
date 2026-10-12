@@ -1,0 +1,4 @@
+# Automatic HTTPS (Let's Encrypt) for the dashboard. DOMAIN comes from .env, e.g. 13-232-10-5.sslip.io
+{$DOMAIN} {
+	reverse_proxy dashboard:8501
+}

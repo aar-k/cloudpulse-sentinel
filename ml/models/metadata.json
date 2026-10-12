@@ -1,0 +1,39 @@
+{
+  "algorithm": "IsolationForest(n_estimators=200, contamination=0.03)",
+  "features": [
+    "cpu",
+    "memory",
+    "latency_ms",
+    "error_rate",
+    "request_count"
+  ],
+  "baseline": {
+    "cpu": {
+      "mean": 27.493457630245157,
+      "std": 13.644077560781934
+    },
+    "memory": {
+      "mean": 44.33793177250063,
+      "std": 10.363892383493452
+    },
+    "latency_ms": {
+      "mean": 120.05998679356658,
+      "std": 16.067476545897215
+    },
+    "error_rate": {
+      "mean": 0.49969376115358477,
+      "std": 0.19918706159099173
+    },
+    "request_count": {
+      "mean": 99.89769404019628,
+      "std": 9.811450780259607
+    }
+  },
+  "train_rows": 40320,
+  "test_rows": 40320,
+  "precision": 1.0,
+  "recall": 0.952,
+  "f1": 0.975,
+  "false_positive_rate": 0.0,
+  "note": "Trained on synthetic data; labels used only for evaluation."
+}
